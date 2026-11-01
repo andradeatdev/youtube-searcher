@@ -1,0 +1,26 @@
+{
+  "name": "youtube-searcher",
+  "version": "1.0.0",
+  "description": "Adds a search bar to YouTube playlist pages",
+  "author": "hdyzen",
+  "type": "module",
+  "homepage": "https://github.com/andradeatdev/youtube-searcher#readme",
+  "bugs": {
+    "url": "https://github.com/andradeatdev/youtube-searcher/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andradeatdev/youtube-searcher.git"
+  },
+  "license": "GPL-3.0",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "eslint": "^10.14.0",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "eslint-plugin-unicorn": "^79.0.0"
+  }
+}
