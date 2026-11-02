@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name               Youtube - Playlist searcher
 // @namespace          https://greasyfork.org/users/821661
-// @version            1.0.0
+// @version            1.1.0
 // @description        Add search bar for playlist page
 // @author             hdyzen
 // @match              https://www.youtube.com/*
