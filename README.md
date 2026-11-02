@@ -18,14 +18,46 @@ Plain text matches title and channel. Operators narrow the result:
 | `text:word` | title or channel |
 | `title:word` | title only |
 | `channel:word` | channel only |
+| `duration:>10m` | videos by length (see [Duration](#duration)) |
+| `type:music` | music only |
+| `type:video` | everything that is not music |
 | `exclude-text:word` | hides title/channel matches |
 | `exclude-title:word` | hides title matches |
 | `exclude-channel:word` | hides channel matches |
+| `exclude-type:music` | hides the given type |
 
-- Matching is case-insensitive and substring-based.
+- Matching is case-insensitive and substring-based (except `type:`, which is exact).
 - Quote values with spaces: `title:"part one"`.
 - Combine operators: `channel:lofi exclude-title:"24/7"`.
+- Repeating an operator is allowed and every occurrence must match: `exclude-text:live exclude-text:remix`.
 - Text outside operators is treated as `text:`.
+- An operator with an invalid value (for example `duration:>` while you are still typing) is ignored instead of hiding the whole list.
+
+### Duration
+
+Accepts a comparison, an exact value or a range:
+
+| Example | Matches |
+|---|---|
+| `duration:>10m` | longer than 10 minutes |
+| `duration:<=5:00` | up to 5 minutes |
+| `duration:5m-10m` | between 5 and 10 minutes |
+| `duration:1h30m` | exactly 1 hour 30 minutes |
+| `duration:90s` | exactly 90 seconds |
+
+- Supported operators: `>`, `>=`, `<`, `<=`, `=` (default).
+- Supported formats: `h`/`m`/`s` units (`1h30m`), clock style (`1:30:00`, `10:30`) and plain numbers, which count as **minutes** (`duration:>20`).
+- Videos without a duration, such as live streams, are hidden when a `duration:` filter is active.
+
+### Examples
+
+```text
+lofi                              title or channel contains "lofi"
+channel:"daft punk" type:music    music from that channel
+duration:<4m exclude-type:music   short videos that are not music
+duration:5m-10m exclude-text:live between 5 and 10 minutes, without "live"
+```
+
 
 ## Limitations
 
