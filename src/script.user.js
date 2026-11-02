@@ -76,13 +76,30 @@ const query = {
 const view = {
     rules: undefined,
 
+    ITEM: [
+        "ytd-browse[page-subtype='playlist'] ytd-two-column-browse-results-renderer[page-subtype='playlist'] ytd-playlist-video-renderer",
+        "ytd-browse[page-subtype='playlist'] ytd-two-column-browse-results-renderer[page-subtype='playlist'] div:has(> yt-lockup-view-model .ytLockupViewModelHorizontal)",
+    ].join(", "),
+
     items() {
-        return document.querySelectorAll("ytd-browse[page-subtype='playlist'] ytd-two-column-browse-results-renderer[page-subtype='playlist'] ytd-playlist-video-renderer");
+        return document.querySelectorAll(this.ITEM);
+    },
+
+    changed(records) {
+        return records.some(({ type, target, addedNodes }) => {
+            if (type === "attributes") return false;
+            if (type === "characterData") return Boolean(target.parentElement?.closest(this.ITEM));
+
+            return [...addedNodes].some(node =>
+                node.nodeType === Node.ELEMENT_NODE &&
+                (node.matches(this.ITEM) || node.closest(this.ITEM) || node.querySelector(this.ITEM)),
+            );
+        });
     },
 
     read(item) {
-        const title = item.querySelector("#video-title")?.textContent.trim().toLowerCase();
-        const channel = item.querySelector("ytd-channel-name")?.textContent.trim().toLowerCase();
+        const title = item.querySelector("#video-title, .ytLockupMetadataViewModelHeadingReset")?.textContent.trim().toLowerCase();
+        const channel = item.querySelector("ytd-channel-name, .ytAttributedStringLinkCallToActionColor")?.textContent.trim().toLowerCase();
         return {
             title,
             channel,
@@ -215,27 +232,54 @@ const bar = {
     },
 
     mount() {
-        const header = document.querySelector("ytd-section-list-renderer[page-subtype='playlist'] ytd-item-section-renderer > #header");
-        if (!header || header.querySelector(".psearch")) return;
-
         this.root ||= this.build();
-        header.append(this.root);
+
+        const playlistHeaderOwner = document.querySelector("ytd-browse[page-subtype='playlist'] :is(yt-item-section-renderer, ytd-item-section-renderer) #header");
+        if (playlistHeaderOwner && !playlistHeaderOwner.querySelector(".psearch")) playlistHeaderOwner.prepend(this.root);
     },
 };
 
-watch.change(() => bar.mount());
+watch.change((records) => {
+    bar.mount();
+
+    if (view.rules?.length && view.changed(records)) {
+        view.apply(view.rules);
+    }
+});
+
+document.addEventListener("yt-navigate-finish", (ev) => bar.mount());
 
 GM_addStyle(`
-    ytd-section-list-renderer[page-subtype='playlist'] ytd-item-section-renderer #header {
+    ytd-browse[page-subtype='playlist'] :is(yt-item-section-renderer, ytd-item-section-renderer) #header {
         display: flex;
     }    
 
     ytd-section-list-renderer[page-subtype='playlist'] ytd-item-section-renderer chip-bar-view-model {
-        width: max-content;
+        /* width: max-content; */
     }
 
-    ytd-section-list-renderer[page-subtype='playlist'] ytd-item-section-renderer chip-bar-view-model .ytChipShapeChip {
+    ytd-two-column-browse-results-renderer[page-subtype='playlist'] :is(yt-item-section-renderer, ytd-item-section-renderer) chip-bar-view-model .ytChipShapeChip {
         height: 37px;
+    }
+
+    #primary > .psearch {
+        margin-left: 48px;
+    }
+    
+    ytd-item-section-renderer[page-subtype="playlist"] .psearch {
+        margin-left: 36px;
+    }
+
+    .psearch + div > chip-bar-view-model {
+        margin-block: 12px;
+    }
+
+    .psearch + div, .psearch + chip-bar-view-model {
+        margin-left: 12px !important;
+    }
+
+    .psearch + div {
+        margin-bottom: 0px !important;
     }
 
     .psearch {
