@@ -130,6 +130,7 @@ const query = {
 
 const view = {
     rules: undefined,
+    cache: new WeakMap(),
 
     ITEM: [
         "ytd-browse[page-subtype='playlist'] ytd-two-column-browse-results-renderer[page-subtype='playlist'] ytd-playlist-video-renderer",
@@ -138,6 +139,15 @@ const view = {
 
     items() {
         return document.querySelectorAll(this.ITEM);
+    },
+
+    data(item) {
+        let data = this.cache.get(item);
+        if (!data) {
+            data = this.read(item);
+            if (data.title) this.cache.set(item, data);
+        }
+        return data;
     },
 
     changed(records) {
@@ -155,16 +165,20 @@ const view = {
     read(item) {
         const title = item.querySelector("#video-title, .ytLockupMetadataViewModelHeadingReset")?.textContent.trim().toLowerCase();
         const channel = item.querySelector("ytd-channel-name, .ytAttributedStringLinkCallToActionColor")?.textContent.trim().toLowerCase();
+        const duration = item.querySelector("yt-thumbnail-badge-view-model")?.textContent.trim()
+        const isMusic = !!item.querySelector("yt-thumbnail-badge-view-model svg path[d^='M5.5 1.383V6']")
         return {
             title,
             channel,
             text: [title, channel].filter(Boolean).join(" "),
+            duration: duration ? time.seconds(duration) : undefined,
+            type: isMusic ? "music" : "video",
         };
     },
 
     test(data, rules) {
-        return rules.every(({ field, value, negate }) => {
-            const found = data[field]?.includes(value) ?? false;
+        return rules.every(({ field, match, negate }) => {
+            const found = match(data[field]);
             return negate ? !found : found;
         });
     },
@@ -177,9 +191,9 @@ const view = {
         this.apply(query.parse(text));
     },
 
-    apply(rules) {
+    apply(rules, items = this.items()) {
         this.rules = rules;
-        for (const item of this.items()) this.toggle(item, this.test(this.read(item), rules));
+        for (const item of items) this.toggle(item, this.test(this.data(item), rules));
     },
 };
 
@@ -297,9 +311,7 @@ const bar = {
 watch.change((records) => {
     bar.mount();
 
-    if (view.rules?.length && view.changed(records)) {
-        view.apply(view.rules);
-    }
+    if (view.rules?.length && view.changed(records)) view.apply(view.rules);
 });
 
 document.addEventListener("yt-navigate-finish", (ev) => bar.mount());
@@ -307,11 +319,7 @@ document.addEventListener("yt-navigate-finish", (ev) => bar.mount());
 GM_addStyle(`
     ytd-browse[page-subtype='playlist'] :is(yt-item-section-renderer, ytd-item-section-renderer) #header {
         display: flex;
-    }    
-
-    ytd-section-list-renderer[page-subtype='playlist'] ytd-item-section-renderer chip-bar-view-model {
-        /* width: max-content; */
-    }
+    } 
 
     ytd-two-column-browse-results-renderer[page-subtype='playlist'] :is(yt-item-section-renderer, ytd-item-section-renderer) chip-bar-view-model .ytChipShapeChip {
         height: 37px;
