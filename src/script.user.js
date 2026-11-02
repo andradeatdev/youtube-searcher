@@ -40,15 +40,71 @@ const element = {
     }
 };
 
+const matcher = {
+    includes: value => data => data?.includes(value) ?? false,
+    equals: value => data => data === value,
+    type: value => (["music", "video"].includes(value) ? matcher.equals(value) : undefined),
+};
+
+const time = {
+    UNITS: { h: 3600, m: 60, s: 1 },
+
+    // "1:30:00", "10:30", "1h30m", "90s", "20" (número puro = minutos)
+    seconds(text) {
+        if (text.includes(":")) {
+            const parts = text.split(":").map(Number);
+            return parts.some(Number.isNaN) ? NaN : parts.reduce((total, part) => total * 60 + part, 0);
+        }
+
+        if (/^\d+(\.\d+)?$/.test(text)) return Number(text) * 60;
+        if (!/^(\d+(\.\d+)?[hms])+$/.test(text)) return NaN;
+
+        let total = 0;
+        for (const [, amount, unit] of text.matchAll(/(\d+(?:\.\d+)?)([hms])/g)) {
+            total += Number(amount) * time.UNITS[unit];
+        }
+        return total;
+    },
+
+    // ">10m", "<=5:00", "=90s", "5m-10m" -> função (segundos) => boolean
+    compile(value) {
+        const range = /^([^<>=-]+)-([^<>=-]+)$/.exec(value);
+        let check;
+
+        if (range) {
+            const [min, max] = [time.seconds(range[1]), time.seconds(range[2])];
+            if (Number.isNaN(min) || Number.isNaN(max)) return;
+            check = seconds => seconds >= min && seconds <= max;
+        } else {
+            const [, op = "=", rest] = /^(>=|<=|>|<|=)?(.+)$/.exec(value);
+            const limit = time.seconds(rest);
+            if (Number.isNaN(limit)) return;
+
+            check = {
+                ">": seconds => seconds > limit,
+                ">=": seconds => seconds >= limit,
+                "<": seconds => seconds < limit,
+                "<=": seconds => seconds <= limit,
+                "=": seconds => seconds === limit,
+            }[op];
+        }
+
+        return data => Number.isFinite(data) && check(data);
+    },
+};
+
 const query = {
     ops: {
-        text: { field: "text", re: /(?<!\S)text:("[^"]+"|\S+)/gi },
-        title: { field: "title", re: /(?<!\S)title:("[^"]+"|\S+)/gi },
-        channel: { field: "channel", re: /(?<!\S)channel:("[^"]+"|\S+)/gi },
+        text: { field: "text", compile: matcher.includes, re: /(?<!\S)text:("[^"]+"|\S+)/gi },
+        title: { field: "title", compile: matcher.includes, re: /(?<!\S)title:("[^"]+"|\S+)/gi },
+        channel: { field: "channel", compile: matcher.includes, re: /(?<!\S)channel:("[^"]+"|\S+)/gi },
+        duration: { field: "duration", compile: time.compile, re: /(?<!\S)duration:("[^"]+"|\S+)/gi },
+        type: { field: "type", compile: matcher.type, re: /(?<!\S)type:("[^"]+"|\S+)/gi },
 
-        "exclude-text": { field: "text", re: /(?<!\S)exclude-text:("[^"]+"|\S+)/gi, negate: true },
-        "exclude-title": { field: "title", re: /(?<!\S)exclude-title:("[^"]+"|\S+)/gi, negate: true },
-        "exclude-channel": { field: "channel", re: /(?<!\S)exclude-channel:("[^"]+"|\S+)/gi, negate: true },
+        "exclude-text": { field: "text", compile: matcher.includes, negate: true, re: /(?<!\S)exclude-text:("[^"]+"|\S+)/gi },
+        "exclude-title": { field: "title", compile: matcher.includes, negate: true, re: /(?<!\S)exclude-title:("[^"]+"|\S+)/gi },
+        "exclude-channel": { field: "channel", compile: matcher.includes, negate: true, re: /(?<!\S)exclude-channel:("[^"]+"|\S+)/gi },
+        "exclude-type": { field: "type", compile: matcher.type, negate: true, re: /(?<!\S)exclude-type:("[^"]+"|\S+)/gi },
     },
 
     parse(text) {
@@ -56,18 +112,17 @@ const query = {
         let rest = text;
 
         for (const op of Object.values(this.ops)) {
-            rest = rest.replace(op.re, (_, value) => {
-                rules.push({
-                    field: op.field,
-                    value: value.replace(/^"|"$/g, "").toLowerCase(),
-                    negate: Boolean(op.negate),
-                });
+            rest = rest.replace(op.re, (_, raw) => {
+                const value = raw.replace(/^"|"$/g, "").toLowerCase();
+                const match = op.compile(value);
+
+                if (match) rules.push({ field: op.field, match, negate: Boolean(op.negate) });
                 return "";
             });
         }
 
         rest = rest.trim().toLowerCase();
-        if (rest) rules.push({ field: "text", value: rest });
+        if (rest) rules.push({ field: "text", match: matcher.includes(rest), negate: false });
 
         return rules;
     },
